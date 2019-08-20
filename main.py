@@ -317,35 +317,3 @@ class PhilipsPhysioLog:
             fig.savefig(f_out, dpi=100)
             plt.close()
 
-if __name__ == '__main__':
-    import nibabel as nib
-    import joblib as jl
-    from glob import glob
-    logs = sorted(glob('../sub-*/func/*work*.txt'))
-
-    def _run_parallel(log):
-        sub_name = op.basename(log).split("_")[0]
-        trigger_method = 'gradient_log'
-        nii = log.replace('_recording-respcardiac_physio.txt', '_bold.nii.gz')
-        vols = nib.load(nii).shape[-1]
-        tr = np.round(nib.load(nii).header['pixdim'][4], 3)
-        print(f'\nProcessing {log}: dyns={vols}, TR={tr:.3f}, method={trigger_method}')
-        try:
-            ms = True if 'stopsignal' in log else False
-            l = PhilipsPhysioLog(f=log, tr=tr, n_dyns=vols, sf=496, manually_stopped=ms)
-            l.load().align(trigger_method=trigger_method)
-            out_dir = op.join(f'../derivatives/physiology/{sub_name}')
-            l.plot_alignment(out_dir=out_dir)
-            l.to_bids()
-            to_return = None
-        except CouldNotFindThresholdError:
-            print(f"Could not find threshold for {log}")
-            to_return = log
-
-        return to_return
-
-    wrong = jl.Parallel(n_jobs=10)(jl.delayed(_run_parallel)(log) for log in logs)
-    wrong = [w for w in wrong if w is not None]
-    #for log in logs:
-    #    _run_parallel(log)
-    np.savetxt('../derivatives/physiology/wrong_conversions.txt', wrong, fmt='%s')
