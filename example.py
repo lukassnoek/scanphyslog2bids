@@ -1,7 +1,9 @@
+import numpy as np
+import os.path as op
 import joblib as jl
 import nibabel as nib
 from glob import glob
-from main import CouldNotFindThreshold, PhilipsPhysioLog
+from main import CouldNotFindThresholdError, PhilipsPhysioLog
 
 logs = sorted(glob('sub-*/func/*SCANPHYSLOG*.log'))
 
