@@ -63,7 +63,7 @@ class PhilipsPhysioLog:
         self.time = None  # to be filled in later
         self.scan_time = None  # to be filled in later
 
-    def load(self, marker_col=9, grad_cols=(6, 7, 8)):
+    def load(self, marker_col=9, resp_cardiac_cols=(4, 5), grad_cols=(6, 7, 8)):
         """ Loads the SCANPHYSLOG and does some preprocessing.
         
         Parameters
@@ -102,7 +102,8 @@ class PhilipsPhysioLog:
         
         # Now, load in actual data, minus the markers (which messes things up)
         dat = np.loadtxt(self.f, dtype=int, usecols=np.arange(marker_col))
-        self.grad = dat[:, grad_cols]  # get gradients
+        self.grad = dat[:, grad_cols]  # set gradients
+        self.respcard = dat[:, resp_cardiac_cols]  # resp/cardiac data
         self.n = self.grad.shape[0]  # number of timepoints
         self.time = np.arange(self.n) / self.sf  # in seconds
         
@@ -146,7 +147,7 @@ class PhilipsPhysioLog:
                            "but trigger_method='gradient_log'!")
                     raise ValueError(msg)
 
-                # Jof use end marker as "custom" end index
+                # Just use end marker as "custom" end index
                 custom_end_idx = self.m_end_idx
                 break
 
@@ -163,7 +164,9 @@ class PhilipsPhysioLog:
             self._determine_triggers_by_interpolation(offset_end_scan)
         elif trigger_method == 'vol_triggers':
             self._determine_triggers_by_volume_markers()
-
+        else:
+            raise ValueError("Please choose trigger_method from 'interpolate', 'vol_triggers', or 'gradient_log'")
+        
         self.real_triggers = self.real_triggers.astype(int)
 
         # Check the time between triggers ("trigger_diffs")
@@ -287,19 +290,13 @@ class PhilipsPhysioLog:
         # as possible, i.e., each TR should have approximately an equal amount of
         # samples. This is not exactly possible when the samples per TR is not an
         # integer. Let's calculate the modulo(self.trs, 1)
-        leftover = np.round(self.trs % 1, 1)
-
+        leftover = int(10 * np.round(self.trs % 1, 1))
+        
         # This is probably too complicated, but it works.
-        p = int(1 / (1 - leftover))  # e.g., 1 / (1 - 0.1) = 1.11
-        diffs = np.array(
-            [int(np.floor(self.trs))
-            if i % p == 0
-            else int(np.ceil(self.trs))
-            for i in range(self.n_dyns)]
-        )
+        diffs = np.diff(np.round(np.arange(self.n_trig + 1) * self.trs)) 
         diffs[0] += assumed_start  # add assumed start
         self.real_triggers = np.cumsum(diffs)  # magic
-
+    
     def _determine_triggers_by_gradient(self, which_grad):
         """ Determine triggers by thresholding the gradient. 
         Very often works, but fails when the gradients are funky,
@@ -339,7 +336,7 @@ class PhilipsPhysioLog:
         (cardiac, resp, trigger) data. """
         vol_triggers = np.zeros(self.n)
         vol_triggers[self.real_triggers] = 1
-        data = np.c_[self.grad, vol_triggers]
+        data = np.c_[self.respcard, vol_triggers]
         return data
 
     def to_bids(self, out_dir=None):
@@ -367,6 +364,12 @@ class PhilipsPhysioLog:
 
         # Get actual data (cardiac, resp, triggers) and save
         data = self._generate_array()
+
+        for i, name in enumerate(['cardiac', 'respiratory']):
+            trace = data[:, i]
+            if np.sum(trace) == 0:
+                print(f"WARNING: the {name} trace is empty!")
+
         tsv_out = f'{base_name}.tsv'
         np.savetxt(tsv_out, data, delimiter='\t')
 
@@ -396,7 +399,7 @@ class PhilipsPhysioLog:
         data = self._generate_array()
         columns = ['Cardiac trace', 'Respiratory trace', 'Volume triggers']
         df = pd.DataFrame(data, columns=columns, index=self.time)
-
+        
         if standardize:
             for col in ['Cardiac trace', 'Respiratory trace']:
                 df[col] = (df[col] - df[col].mean()) / df[col].std()
@@ -404,7 +407,7 @@ class PhilipsPhysioLog:
         fig, axes = plt.subplots(figsize=(20, 10), nrows=3, sharex=True, sharey=False)
         for i, ax in enumerate(axes):
             ax.plot(df.iloc[:, i], lw=1)
-            ax.set_xlim(0, df.shape[0])
+            ax.set_xlim(0, df.index[-1])
             ax.set_title(df.columns[i], fontsize=20)
 
             if i == 2:
@@ -494,8 +497,8 @@ class PhilipsPhysioLog:
 
             ax[i].plot(period, start_end[period], lw=2)
             legend.append('start/end')
-
-            ax[i].plot(period, real_triggers[period], lw=lw_trigs)
+            
+            ax[i].plot(period, trigger_trace[period], lw=lw_trigs)
             ax[i].set_title(title, fontsize=15)
             ax[i].set_xlim(period[0] - ext_space, period[-1] + ext_space)
             ax[i].legend(legend + ['triggers'])
