@@ -29,10 +29,6 @@ def _run_parallel(log):
 
     return to_return
 
-    wrong = jl.Parallel(n_jobs=10)(jl.delayed(_run_parallel)(log) for log in logs)
-    wrong = [w for w in wrong if w is not None]  # filter wrong conversions
-    np.savetxt('derivatives/physiology/wrong_conversions.txt', wrong, fmt='%s')
-
-
-logs = sorted(glob('../../../sub*/func/*.log'))
-Parallel(n_jobs=20)(delayed(_run_parallel)(log) for log in logs)
+wrong = jl.Parallel(n_jobs=10)(jl.delayed(_run_parallel)(log) for log in logs)
+wrong = [w for w in wrong if w is not None]  # filter wrong conversions
+np.savetxt('../derivatives/physiology/wrong_conversions.txt', wrong, fmt='%s')
