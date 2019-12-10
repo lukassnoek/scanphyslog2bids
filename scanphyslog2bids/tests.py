@@ -43,5 +43,3 @@ def test_python_interface():
     for ext in ['tsv.gz', '.json']:
         files = glob(op.join(data_dir, f'*{ext}'))
         _ = [os.remove(f) for f in files]
-
-
