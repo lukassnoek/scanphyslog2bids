@@ -18,9 +18,9 @@ class CouldNotFindThresholdError(Exception):
 
 
 class PhilipsPhysioLog:
-    """ Reads, converts, and aligns Philips physiology files (SCANPHYSLOG).
+    """ Reads, converts, and aligns Philips physiology files (SCANPHYSLOG) such
+    that it's BIDS-compatible.
 
-    Work in progress!
     """
     def __init__(self, f, sf=496, fmri_file=None, n_dyns=None, tr=None, manually_stopped=False):
         """ Initializes PhilipsPhysioLog object. 
@@ -84,11 +84,12 @@ class PhilipsPhysioLog:
             txt = f_in.readlines()
             # Remove weird pound signs, double spaces, and newline characters
             txt = [line.replace('  ', ' ').replace('\n', '') for line in txt if line != '#\n']
+            # markers are actually hexadecimal values, but strings are easier (I'm lazy)
             self.markers = np.array([s.split(' ')[marker_col] for s in txt])
 
-        m_start_idx = np.where(self.markers == '0100')[0]
+        m_start_idx = np.where(self.markers == '0010')[0]
         if len(m_start_idx) == 0:
-            print("WARNING: didn't find a start marker ('0100') so setting it to 0.")
+            print("WARNING: didn't find a start marker ('0010') so setting it to 0.")
             m_start_idx = 0
         else:
             # Start one before the marker
@@ -181,11 +182,12 @@ class PhilipsPhysioLog:
         
         # Check the diff of last vol. May not be completely accurate, but that's
         # fine usually
-        diff_last_vol = (self.c_end_idx - self.real_triggers[-1])
+        diff_last_vol = self.c_end_idx - self.real_triggers[-1]
         if np.abs(diff_last_vol - self.trs) > 10:
             # Notify user when the last trigger duration is off >10 samples
-            diff_in_sec = diff_last_vol / self.sf
-            print(f"WARNING: last trigger has a duration of {diff_in_sec:.2f} seconds!")
+            diff_in_samp = int(diff_last_vol - self.trs)
+            diff_in_sec = diff_in_samp / self.sf
+            print(f"WARNING: last trigger is {diff_in_sec:.2f} sec ({diff_in_samp} samples) longer than expected!")
         
         # Weird triggers = those with a diff much larger/smaller than a TR
         # (except the last one)
@@ -291,10 +293,10 @@ class PhilipsPhysioLog:
 
         # We assume the last volume ended by the end of the gradient minus
         # some offset
-        assumed_end_last_vol = self.c_end_idx - offset_end_scan 
-        
+        assumed_start_last_vol = self.c_end_idx - offset_end_scan - self.trs 
+
         # Backtrack to start
-        assumed_start = int(assumed_end_last_vol - (self.trs * self.n_trig))
+        assumed_start = int(assumed_start_last_vol - (self.trs * self.n_trig))
 
         # Okay, this is stupid, but necessary. Sometimes, people (like me) have
         # weird TRs, like 1.317. Now, we need to equally space these TRs as well
@@ -303,7 +305,7 @@ class PhilipsPhysioLog:
         diffs = np.diff(np.round(np.arange(self.n_trig + 1) * self.trs)) 
         diffs[0] += assumed_start  # add assumed start
         self.real_triggers = np.cumsum(diffs)  # magic
-    
+
     def _determine_triggers_by_gradient(self, which_grad):
         """ Determine triggers by thresholding the gradient. 
         Very often works, but fails when the gradients are funky,

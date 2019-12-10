@@ -6,6 +6,7 @@ from glob import glob
 from main import CouldNotFindThresholdError, PhilipsPhysioLog
 from joblib import Parallel, delayed
 
+
 def _run_parallel(log):
     sub_name = op.basename(log).split("_")[0]
     trigger_method = 'interpolate'  # or: 'interpolation', 'vol_triggers'
