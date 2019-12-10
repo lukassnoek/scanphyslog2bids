@@ -16,6 +16,13 @@ Or clone this repository locally and install as follows:
 python setup.py install
 ```
 
+This package depends on the following Python packages:
+- nibabel
+- numpy
+- pandas
+- matplotlib (optional for plots)
+- click (for the CLI)
+
 ## Usage
 This package comes with a Python interface and a CLI. See the code below for a minimal example using the Python interface:
 
