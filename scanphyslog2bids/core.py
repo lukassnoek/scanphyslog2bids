@@ -1,6 +1,7 @@
 import os
 import gzip
 import json
+import click
 import os.path as op
 import numpy as np
 import pandas as pd
@@ -40,7 +41,7 @@ class PhilipsPhysioLog:
         manually_stopped : bool
             Whether the scan was manually stopped or not
         """
-        self.f = f
+        self.f = op.abspath(f)
         self.fmri_file = fmri_file
         self.sf = sf  # sampling freq
         self.n_dyns = n_dyns
@@ -70,6 +71,10 @@ class PhilipsPhysioLog:
         ----------
         marker_col : int
             Number of column with markers (0020, etc) in it
+        resp_cardiac_cols : tuple
+            Indices of columns with respiratory/cardiac traces
+        grad_cols : tuple
+            Indices of columns with gradient traces
         """
         with open(self.f, 'r') as f_in:
             for line in f_in:
@@ -121,12 +126,14 @@ class PhilipsPhysioLog:
             logged gradients), 'interpolate' (interpolate triggers from start to end),
             or 'vol_triggers' (using volume markers)
         which_grad : str
-            Which gradient to use for finding triggers (only relevant for gradient_log)
+            Which gradient to use for finding triggers (only relevant for gradient_log).
+            Either 'x', 'y', or 'z'. The default ('y') is highly recommended
         trigger_diff_cutoff : int
             Cutoff for detecting erroneous trigger diffs (time between triggers)
         offset_end_scan : int
             Assumed offset of the end of your scan and the actual end of your last volume.
-            Unfortunately, this is not the same (thanks, Philips).
+            Unfortunately, this is not the same (thanks, Philips). The default, 166 samples,
+            has been empirically estimated using known scan offsets.
         """
 
         found_start_of_grad = False
@@ -212,6 +219,7 @@ class PhilipsPhysioLog:
         """ Removes 'extra' (erroneous) triggers """
         trigger_diffs = np.r_[np.diff(real_triggers), self.trs]
         extra_idx = np.abs(self.trs - trigger_diffs) > self.trigger_diff_cutoff
+
         prob_extra = np.diff(np.r_[extra_idx.astype(int), 0]) == -1
         if prob_extra.sum() > 0:
             for idx in np.where(prob_extra)[0]:
@@ -227,7 +235,7 @@ class PhilipsPhysioLog:
         return real_triggers
 
     def _check_for_missed_triggers(self, real_triggers):
-        """ Interpolates extra triggers when apparently missed. """
+        """ Interpolates extra triggers when seemingly missed. """
         trigger_diffs = np.diff(np.r_[real_triggers, self.c_end_idx])
 
         # When a trigger diff is close to 2 * TR * sf, it probably missed exactly one,
@@ -257,22 +265,25 @@ class PhilipsPhysioLog:
 
         # There may be more triggers (e.g., dummies) than dynamics,
         # so remove all 'excess' triggers
-        real_triggers = init_triggers[-self.n_trig:]
-        n_real = len(real_triggers)
-        n_init = len(init_triggers)
+        if init_triggers.size > self.n_trig:
+            to_remove = init_triggers.size - self.n_trig
+            print(f"WARNING: detected more volume triggers ({init_triggers.size}) "
+                  f"than expected ({self.n_trig}), so going to remove {to_remove} "
+                  "from the beginning of the file ...")    
 
-        # Check to be sure
-        if n_real != self.n_trig:
-            raise ValueError(
-                f"ERROR: expected to find {self.n_dyns} triggers, but found {n_real} "
-                f"(and {n_init} init triggers)"
-            )
-
-        self.real_triggers = real_triggers
+        self.real_triggers = init_triggers[-self.n_trig:]
 
     def _determine_triggers_by_interpolation(self, offset_end_scan):
         """ Determine triggers by interpolation from (assumed)
-        end of scan to begin of scan. Only use when you're really desperate. """
+        end of scan to begin of scan. Only use when you're really desperate, such as
+        when there are no volume markers *and* no logged gradient.
+        
+        Parameters
+        ----------
+        offset_end_scan : int
+            Assumed offset (i.e., difference end of last volume and end of file) in
+            samples
+        """
 
         if self.manually_stopped:
             print("WARNING: using the interpolation method with manually stopped scans "
@@ -288,11 +299,7 @@ class PhilipsPhysioLog:
         # Okay, this is stupid, but necessary. Sometimes, people (like me) have
         # weird TRs, like 1.317. Now, we need to equally space these TRs as well
         # as possible, i.e., each TR should have approximately an equal amount of
-        # samples. This is not exactly possible when the samples per TR is not an
-        # integer. Let's calculate the modulo(self.trs, 1)
-        leftover = int(10 * np.round(self.trs % 1, 1))
-        
-        # This is probably too complicated, but it works.
+        # samples (otherwise, the RETROICOR package that I use, PhysIO, doesn't work)
         diffs = np.diff(np.round(np.arange(self.n_trig + 1) * self.trs)) 
         diffs[0] += assumed_start  # add assumed start
         self.real_triggers = np.cumsum(diffs)  # magic
@@ -300,7 +307,13 @@ class PhilipsPhysioLog:
     def _determine_triggers_by_gradient(self, which_grad):
         """ Determine triggers by thresholding the gradient. 
         Very often works, but fails when the gradients are funky,
-        e.g., when your FOV is extremely tilted or so. """
+        e.g., when your FOV is extremely tilted or so. 
+        
+        Parameters
+        ----------
+        which_grad : str
+            Either 'x', 'y', or 'z'
+        """
 
         # align_grad = data from gradient that is actually used
         self.align_grad = self.grad[:, {'x': 0, 'y': 1, 'z': 2}[which_grad]]
@@ -342,7 +355,7 @@ class PhilipsPhysioLog:
     def to_bids(self, out_dir=None):
         """ Saves the data in BIDS format to disk. """
 
-        if out_dir is None:
+        if out_dir is None or not out_dir:
             # Save into same dir as SCANPHYSLOG
             out_dir = op.dirname(self.f)
         
@@ -408,7 +421,7 @@ class PhilipsPhysioLog:
         for i, ax in enumerate(axes):
             ax.plot(df.iloc[:, i], lw=1)
             ax.set_xlim(0, df.index[-1])
-            ax.set_title(df.columns[i], fontsize=20)
+            ax.set_title(df.columns.values.tolist()[i], fontsize=20)
 
             if i == 2:
                 ax.set_xlabel('Time (in samples)', fontsize=15)
@@ -523,8 +536,41 @@ class PhilipsPhysioLog:
         base_name = op.join(out_dir, base_name + '_alignment.png')
 
         if n_weird > 0:  # for debugging purposes
-            base_name = base_name.replace('.png', '_CHECKOUT.png')
+            base_name = base_name.replace('.png', '_ContainsWeirdTriggers.png')
         
         fig.savefig(base_name, dpi=100)
         plt.close()
 
+
+@click.command(name='scanphyslog2bids')
+@click.option('--file', type=str, help='Scanphyslog file to convert')
+@click.option('--sf', type=int, default=496, help='Sampling rate')
+@click.option('--fmri', type=str, default=None, help='Associated fmri file')
+@click.option('--ndyns', type=int, default=None, help='Number of dynamics/volumes')
+@click.option('--tr', type=float, default=None, help='Repetition time of fmri scan')
+@click.option('--manualstop', is_flag=True, help='Was the scan manually stopped?')
+@click.option('--triggermethod', default='gradient_log', type=str, help='Method to detect triggers')
+@click.option('--outdir', default=None, help='Output directory for BIDS file')
+@click.option('--plottraces', is_flag=True, help='Whether to plot the traces')
+@click.option('--plotalignment', is_flag=True, help='Whether to plot the alignment')
+@click.option('--derivdir', default=None, help='Derivatives directory (for plots)')
+def cmd_interface(file, sf, fmri, ndyns, tr, manualstop, triggermethod, outdir,
+                  plottraces, plotalignment, derivdir):
+    
+    if fmri is not None:
+        fmri_img = nib.load(fmri)
+        ndyns = fmri_img.shape[-1]
+        tr = np.round(fmri_img.header['pixdim'][4], 3)
+
+    print(f'\nProcessing {file}: sf={sf}, dyns={ndyns}, TR={tr:.3f}, method={triggermethod}')
+    phlog = PhilipsPhysioLog(f=file, tr=tr, n_dyns=ndyns, sf=sf, manually_stopped=manualstop)
+    phlog.load()
+    phlog.align(trigger_method=triggermethod)  # load and find vol triggers
+    
+    phlog.to_bids(out_dir=outdir)  # writes out .tsv.gz and .json files
+    
+    if plotalignment:
+        phlog.plot_alignment(out_dir=derivdir)  # plots alignment with gradient
+    
+    if plottraces:
+        phlog.plot_traces(out_dir=derivdir)
