@@ -16,7 +16,7 @@ Or clone this repository locally and install as follows:
 python setup.py install
 ```
 
-This package depends on the following Python packages:
+This package uses Python 3.6 or higher and depends on the following Python packages:
 - nibabel
 - numpy
 - pandas
