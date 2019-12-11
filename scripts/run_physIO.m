@@ -58,8 +58,8 @@ physio.model.retroicor.order.cr = 1;
 physio.model.rvt.include = true;
 physio.model.hrv.include = true;    
 
-physio.model.rvt.delays = 0;
-physio.model.hrv.delays = 0;
+physio.model.rvt.delays = 1;
+physio.model.hrv.delays = 1;
 
 physio.model.noise_rois.include = false;
 physio.model.movement.include = false;
