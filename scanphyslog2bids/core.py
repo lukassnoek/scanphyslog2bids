@@ -2,6 +2,7 @@ import os
 import gzip
 import json
 import click
+import logging
 import os.path as op
 import numpy as np
 import pandas as pd
@@ -9,6 +10,15 @@ import matplotlib.pyplot as plt
 import nibabel as nib
 from glob import glob
 from copy import copy
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(threadName)-8s] [%(levelname)-7.7s]  %(message)s",
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
 
 
 class CouldNotFindThresholdError(Exception):
@@ -61,8 +71,10 @@ class PhilipsPhysioLog:
 
         self.n_trig = n_dyns + 1 if manually_stopped else n_dyns
         self.trs = self.tr * self.sf
+        self.has_grad = True  # changed later if necessary
         self.time = None  # to be filled in later
         self.scan_time = None  # to be filled in later
+        self.logger = logging.getLogger(__name__)
 
     def load(self, marker_col=9, resp_cardiac_cols=(4, 5), grad_cols=(6, 7, 8)):
         """ Loads the SCANPHYSLOG and does some preprocessing.
@@ -89,7 +101,7 @@ class PhilipsPhysioLog:
 
         m_start_idx = np.where(self.markers == '0010')[0]
         if len(m_start_idx) == 0:
-            print("WARNING: didn't find a start marker ('0010') so setting it to 0.")
+            self.logger.warning("Didn't find a start marker ('0010') so setting it to 0.")
             m_start_idx = 0
         else:
             # Start one before the marker
@@ -97,11 +109,18 @@ class PhilipsPhysioLog:
 
         m_end_idx = np.where(self.markers == '0020')[0]
         if len(m_end_idx) == 0:
-            print("WARNING: didn't find an end marker ('0200')! "
-                  "Setting it to the length of the file.")
+            self.logger.warning(
+                "Didn't find an end marker ('0020') so setting it to the length of the file."
+                "This is likely to be inaccurate ..."
+            )
             m_end_idx = len(txt) - 1
         else:
             m_end_idx = m_end_idx[-1]
+            diff_marker_and_end = len(txt) - m_end_idx
+            self.logger.info(
+                f"Found end marker ('0020') at an offset of {diff_marker_and_end} samples "
+                "relative to the end of the file."
+            )
 
         self.m_start_idx = m_start_idx  # marker start index
         self.m_end_idx = m_end_idx  # marker end index
@@ -116,7 +135,7 @@ class PhilipsPhysioLog:
         return self  # for chaining
 
     def align(self, trigger_method='gradient_log', which_grad='y', trigger_diff_cutoff=5,
-              offset_end_scan=166):
+              offset_end_scan=0):
         """ Tries to find the onset of the volumes ('triggers') as to align
         the physio data with the fMRI volumes.
 
@@ -145,17 +164,27 @@ class PhilipsPhysioLog:
             if self.grad[custom_end_idx, :].any():
                 # If any of the gradients != 0, we found it
                 found_start_of_grad = True
+                self.logger.info(
+                    f"Trimmed off {self.m_end_idx - custom_end_idx} samples from end of file "
+                    "based on the (absence) of a gradient."
+                )
             else:  # reduce custom end index by 1
                 custom_end_idx -= 1
 
             if custom_end_idx < 0:
-                
+                self.has_grad = False
                 if trigger_method == 'gradient_log':
-                    msg = ("ERROR: seems like gradients were not logged "
-                           "but trigger_method='gradient_log'!")
-                    raise ValueError(msg)
+                    raise ValueError(
+                        "Trigger method is set to 'gradient_log', but it seems like "
+                        "the gradients were not logged!"
+                    )
+                else:
+                    self.logger.warning(
+                        "No gradient detected, so have to assume the end marker is correct. "
+                        "Consider setting 'offset_end_scan'."
+                    )
 
-                # Just use end marker as "custom" end index
+                # Just use end marker as "custom" end index if there's no gradient
                 custom_end_idx = self.m_end_idx
                 break
 
@@ -170,10 +199,10 @@ class PhilipsPhysioLog:
             self._determine_triggers_by_gradient(which_grad)
         elif trigger_method == 'interpolate':
             self._determine_triggers_by_interpolation(offset_end_scan)
-        elif trigger_method == 'vol_triggers':
+        elif trigger_method == 'vol_markers':
             self._determine_triggers_by_volume_markers()
         else:
-            raise ValueError("Please choose trigger_method from 'interpolate', 'vol_triggers', or 'gradient_log'")
+            raise ValueError("Please choose trigger_method from 'interpolate', 'vol_markers', or 'gradient_log'")
         
         self.real_triggers = self.real_triggers.astype(int)
 
@@ -187,8 +216,11 @@ class PhilipsPhysioLog:
             # Notify user when the last trigger duration is off >10 samples
             diff_in_samp = int(diff_last_vol - self.trs)
             diff_in_sec = diff_in_samp / self.sf
-            print(f"WARNING: last trigger is {diff_in_sec:.2f} sec ({diff_in_samp} samples) longer than expected!")
-        
+            self.logger.warning(
+                f"Last trigger is {diff_in_sec:.2f} sec ({diff_in_samp} samples) longer than expected "
+                "based on the end marker (after trimming) ..."
+            )
+ 
         # Weird triggers = those with a diff much larger/smaller than a TR
         # (except the last one)
         weird_triggers_idx = np.abs(self.trigger_diffs - self.trs) > trigger_diff_cutoff
@@ -198,8 +230,7 @@ class PhilipsPhysioLog:
         n_weird = self.weird_triggers.size 
         if n_weird > 0:  # Notify user when there are weird triggers!
             weird_triggers_diff = self.trigger_diffs[weird_triggers_idx]        
-            print(f"WARNING: found {n_weird} weird triggers with the following durations:")
-            print(weird_triggers_diff)
+            self.logger.warning(f"Found {n_weird} weird triggers with the following durations: {weird_triggers_diff}")
 
         if self.manually_stopped:
             # If it was manually stopped, the last volume was not actually
@@ -209,8 +240,7 @@ class PhilipsPhysioLog:
         n_real = self.real_triggers.size
         m_diff = self.trigger_diffs[:-1].mean() / self.sf 
         std_diff = self.trigger_diffs[:-1].std() / self.sf
-        print(f"INFO: Found {n_real} triggers with a mean duration of "
-              f"{m_diff:.5f} ({std_diff:.5f})!")
+        self.logger.info(f"Found {n_real} triggers with a mean duration of {m_diff:.5f} ({std_diff:.5f})!")
 
         # Define scan_time relative to first trigger (as BIDS needs)
         self.scan_time = self.time - self.time[self.real_triggers[0]]
@@ -227,8 +257,10 @@ class PhilipsPhysioLog:
             for idx in np.where(prob_extra)[0]:
                 pre, post = trigger_diffs[idx-1], trigger_diffs[idx]
                 if np.abs((pre + post) - (self.trs * 2)) < (self.trigger_diff_cutoff * 2):
-                    print(f"WARNING: Interpolated extra trigger: {(pre / self.trs):.2f} (pre) "
-                          f" and {(post / self.trs):.2f} (post)")
+                    self.logger.warning(
+                        f"WARNING: Interpolated extra trigger: {(pre / self.trs):.2f} (pre) "
+                        f" and {(post / self.trs):.2f} (post)"
+                    )
                     real_triggers = real_triggers[real_triggers != real_triggers[idx]]
                     real_triggers = np.r_[real_triggers, real_triggers[idx-1] + self.trs]
 
@@ -259,7 +291,7 @@ class PhilipsPhysioLog:
         init_triggers = np.where(idx_init_triggers)[0]
 
         if len(init_triggers) == 0:
-            raise ValueError("ERROR: did not find any volume markers ('0200' or '0202')!")
+            raise ValueError("Did not find any volume markers ('0200' or '0202')!")
 
         # Just to make sure, check the diffs
         init_triggers = self._check_for_missed_triggers(init_triggers)
@@ -269,9 +301,11 @@ class PhilipsPhysioLog:
         # so remove all 'excess' triggers
         if init_triggers.size > self.n_trig:
             to_remove = init_triggers.size - self.n_trig
-            print(f"WARNING: detected more volume triggers ({init_triggers.size}) "
-                  f"than expected ({self.n_trig}), so going to remove {to_remove} "
-                  "from the beginning of the file ...")    
+            self.logger.warning(
+                f"WARNING: detected more volume triggers ({init_triggers.size}) "
+                f"than expected ({self.n_trig}), so going to remove {to_remove} "
+                "from the beginning of the file ..."
+            )    
 
         self.real_triggers = init_triggers[-self.n_trig:]
 
@@ -288,8 +322,10 @@ class PhilipsPhysioLog:
         """
 
         if self.manually_stopped:
-            print("WARNING: using the interpolation method with manually stopped scans "
-                  "is a very bad idea!")
+            self.logger.warning(
+                "Using the interpolation method with manually stopped scans "
+                "is a very bad idea!"
+            )
 
         # We assume the last volume ended by the end of the gradient minus
         # some offset
@@ -383,14 +419,14 @@ class PhilipsPhysioLog:
         for i, name in enumerate(['cardiac', 'respiratory']):
             trace = data[:, i]
             if np.sum(trace) == 0:
-                print(f"WARNING: the {name} trace is empty!")
+                self.logger.warning(f"The {name} trace is empty!")
 
         tsv_out = f'{base_name}.tsv'
         np.savetxt(tsv_out, data, delimiter='\t')
 
         # Zip the data (BIDS needs .tsv.gz files)        
         with open(tsv_out, 'rb') as f_in, gzip.open(tsv_out + '.gz', 'wb') as f_out:
-            print(f"INFO: Saving BIDS data to {tsv_out} ...")
+            self.logger.info(f"Saving BIDS data to {tsv_out} ...")
             f_out.writelines(f_in)
         
         # Remove old (unzipped) tsv file
@@ -462,7 +498,7 @@ class PhilipsPhysioLog:
 
         n_weird = len(self.weird_triggers)
         if n_weird > 5:
-            print(f"WARNING: found {n_weird} weird triggers! Only going to plot the first 5")
+            self.logger.warning(f"Found {n_weird} weird triggers! Only going to plot the first 5")
             n_weird = 5
 
         fig, ax = plt.subplots(nrows=(4 + n_weird), figsize=(30, 9 + (3 * n_weird)))
@@ -564,8 +600,8 @@ def cmd_interface(file, sf, fmri, ndyns, tr, manualstop, triggermethod, outdir,
         ndyns = fmri_img.shape[-1]
         tr = np.round(fmri_img.header['pixdim'][4], 3)
 
-    print(f'\nProcessing {file}: sf={sf}, dyns={ndyns}, TR={tr:.3f}, method={triggermethod}')
     phlog = PhilipsPhysioLog(f=file, tr=tr, n_dyns=ndyns, sf=sf, manually_stopped=manualstop)
+    phlog.logger.info(f'\nProcessing {file}: sf={sf}, dyns={ndyns}, TR={tr:.3f}, method={triggermethod}')
     phlog.load()
     phlog.align(trigger_method=triggermethod)  # load and find vol triggers
     

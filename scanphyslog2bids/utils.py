@@ -1,4 +1,5 @@
 import click
+import os.path as op
 import pandas as pd
 from glob import glob
 from tqdm import tqdm
@@ -20,7 +21,7 @@ NAMES = [
 ]
 
 @click.command()
-@click.option('--directory', default=None, help='Physiology derivative dir')
+@click.option('--directory', required=True, help='Physiology derivative dir')
 def add_header_to_physio_tsv(directory):
     files = sorted(glob(op.join(directory, '**', '*.tsv'), recursive=True))
     for tsv in tqdm(files):
