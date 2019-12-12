@@ -1,4 +1,4 @@
-function [  ] = run_retroicor(phys_file, fmri_file, sf, save_dir, per_slice)
+function [  ] = run_physIO(phys_file, fmri_file, sf, save_dir, per_slice, overwrite)
 % Runs TAPAS PhysIO RETROICOR/HRV/RVT estimation
 
 % load sf from json and tr/n_slices/n_vols from nii
@@ -15,7 +15,14 @@ physio = tapas_physio_new();
 ricor_out = strrep(basename,'physio.tsv','desc-retroicor_regressors.tsv');
 mat_out = strrep(basename,'physio.tsv','desc-PhysIO_info.mat');
 
-fprintf('Trying to create %s with %i vols, %i slices, and TR=%.3f...', ricor_out, n_vols, n_slices, tr);
+if exist(fullfile(save_dir, ricor_out)) == 2
+    if overwrite == 0
+        fprintf('File %s already exists! Skipping ...\n', ricor_out);
+        return
+    end
+end
+
+fprintf('\nTrying to create %s with %i vols, %i slices, and TR=%.3f...\n', ricor_out, n_vols, n_slices, tr);
 
 % Turn off plots
 set(0,'DefaultFigureVisible','off');
@@ -58,8 +65,8 @@ physio.model.retroicor.order.cr = 1;
 physio.model.rvt.include = true;
 physio.model.hrv.include = true;    
 
-physio.model.rvt.delays = 1;
-physio.model.hrv.delays = 1;
+physio.model.rvt.delays = 0;
+physio.model.hrv.delays = 0;
 
 physio.model.noise_rois.include = false;
 physio.model.movement.include = false;

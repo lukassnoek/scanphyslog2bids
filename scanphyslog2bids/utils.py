@@ -17,7 +17,7 @@ NAMES = [
     # additive (cardiac + resp) or difference (cardiac - resp), cos/sin, order
     'interaction_add_cos_00', 'interaction_add_sin_00',
     'interaction_diff_cos_00', 'interaction_diff_sin_00',
-    'hrv_00', 'hrv_01', 'rvt_00', 'rvt_01'
+    'hrv', 'rvt'
 ]
 
 @click.command()
@@ -27,10 +27,7 @@ def add_header_to_physio_tsv(directory):
     for tsv in tqdm(files):
         df = pd.read_csv(tsv, sep='\t', header=None)
         if df.iloc[0, 0] == 'cardiac_cos_00':
-            print(f"Skipping {tsv}, because it already contains a proper header!")
             continue
-        else:
-            print(f"Processing {tsv} ... ")
 
         if df.iloc[:, -1].isna().all():
             # Remove empty col

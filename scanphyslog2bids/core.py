@@ -111,7 +111,7 @@ class PhilipsPhysioLog:
         if len(m_end_idx) == 0:
             self.logger.warning(
                 "Didn't find an end marker ('0020') so setting it to the length of the file."
-                "This is likely to be inaccurate ..."
+                "This is likely to be inaccurate."
             )
             m_end_idx = len(txt) - 1
         else:
@@ -209,7 +209,17 @@ class PhilipsPhysioLog:
             raise ValueError("Please choose trigger_method from 'interpolate', 'vol_markers', or 'gradient_log'")
         
         self.real_triggers = self.real_triggers.astype(int)
-
+        
+        if self.manually_stopped:
+            # If it was manually stopped, the last volume was not actually
+            # recorded, so let's remove it
+            if (self.c_end_idx - self.real_triggers[-1]) >= self.trs:
+                self.logger.warn(
+                    "Going to remove last trigger because manually_stopped=True, "
+                    "but seems to be 'real' trigger? (has >sf*TR samples)"
+                )
+            self.real_triggers = self.real_triggers[:-1]
+        
         # Check the time between triggers ("trigger_diffs")
         self.trigger_diffs = np.diff(np.r_[self.real_triggers, self.c_end_idx])
         
@@ -222,7 +232,7 @@ class PhilipsPhysioLog:
             diff_in_sec = diff_in_samp / self.sf
             self.logger.warning(
                 f"Last trigger is {diff_in_sec:.2f} sec ({diff_in_samp} samples) longer than expected "
-                "based on the end marker (after trimming) ..."
+                "based on the end marker (after trimming)."
             )
  
         # Weird triggers = those with a diff much larger/smaller than a TR
@@ -236,11 +246,6 @@ class PhilipsPhysioLog:
             weird_triggers_diff = self.trigger_diffs[weird_triggers_idx]        
             self.logger.warning(f"Found {n_weird} weird triggers with the following durations: {weird_triggers_diff}")
 
-        if self.manually_stopped:
-            # If it was manually stopped, the last volume was not actually
-            # recorded, so let's remove it
-            self.real_triggers = self.real_triggers[:-1]
-        
         n_real = self.real_triggers.size
         m_diff = self.trigger_diffs[:-1].mean() / self.sf 
         std_diff = self.trigger_diffs[:-1].std() / self.sf
@@ -308,7 +313,7 @@ class PhilipsPhysioLog:
             self.logger.warning(
                 f"WARNING: detected more volume triggers ({init_triggers.size}) "
                 f"than expected ({self.n_trig}), so going to remove {to_remove} "
-                "from the beginning of the file ..."
+                "from the beginning of the file."
             )    
 
         self.real_triggers = init_triggers[-self.n_trig:]
@@ -423,7 +428,7 @@ class PhilipsPhysioLog:
 
         # Zip the data (BIDS needs .tsv.gz files)        
         with open(tsv_out, 'rb') as f_in, gzip.open(tsv_out + '.gz', 'wb') as f_out:
-            self.logger.info(f"Saving BIDS data to {tsv_out} ...")
+            self.logger.info(f"Saving BIDS data to {tsv_out}.")
             f_out.writelines(f_in)
         
         # Remove old (unzipped) tsv file
