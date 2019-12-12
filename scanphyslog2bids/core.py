@@ -200,7 +200,7 @@ class PhilipsPhysioLog:
 
         # Do the actual hard work below (at least, for the gradient method)!
         if trigger_method == 'gradient_log':
-            self._determine_triggers_by_gradient(which_grad)
+            self._determine_triggers_by_gradient()
         elif trigger_method == 'interpolate':
             self._determine_triggers_by_interpolation(offset_end_scan)
         elif trigger_method == 'vol_markers':
@@ -350,11 +350,6 @@ class PhilipsPhysioLog:
         """ Determine triggers by thresholding the gradient. 
         Very often works, but fails when the gradients are funky,
         e.g., when your FOV is extremely tilted or so. 
-        
-        Parameters
-        ----------
-        which_grad : str
-            Either 'x', 'y', or 'z'
         """
 
         # set prescan stuff to zero
