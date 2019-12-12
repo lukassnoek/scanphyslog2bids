@@ -164,6 +164,10 @@ class PhilipsPhysioLog:
             if self.grad[custom_end_idx, :].any():
                 # If any of the gradients != 0, we found it
                 found_start_of_grad = True
+                
+                # align_grad = data from gradient that is actually used
+                # even if trigger_method != 'gradient_log', it's nice for the plots
+                self.align_grad = self.grad[:, {'x': 0, 'y': 1, 'z': 2}[which_grad]]        
                 self.logger.info(
                     f"Trimmed off {self.m_end_idx - custom_end_idx} samples from end of file "
                     "based on the (absence) of a gradient."
@@ -342,7 +346,7 @@ class PhilipsPhysioLog:
         diffs[0] += assumed_start  # add assumed start
         self.real_triggers = np.cumsum(diffs)  # magic
 
-    def _determine_triggers_by_gradient(self, which_grad):
+    def _determine_triggers_by_gradient(self):
         """ Determine triggers by thresholding the gradient. 
         Very often works, but fails when the gradients are funky,
         e.g., when your FOV is extremely tilted or so. 
@@ -353,8 +357,6 @@ class PhilipsPhysioLog:
             Either 'x', 'y', or 'z'
         """
 
-        # align_grad = data from gradient that is actually used
-        self.align_grad = self.grad[:, {'x': 0, 'y': 1, 'z': 2}[which_grad]]
         # set prescan stuff to zero
         self.approx_start = self.c_end_idx - (self.trs * self.n_trig) - self.trs * 0.05
         grad = self.align_grad.copy()  # we want to plot everything, incl. prescan, later
@@ -542,7 +544,7 @@ class PhilipsPhysioLog:
             ext_space = 300 if i == 0 else 50
             lw_trigs = 1 if i == 0 else 2  # linewidth
             legend = []
-            if hasattr(self, 'align_grad'):
+            if self.has_grad:
                 ax[i].plot(period, self.align_grad[period], lw=0.5)
                 legend.append('grad')
 
