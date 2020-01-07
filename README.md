@@ -1,7 +1,9 @@
 # scanphyslog2bids
 [![Build Status](https://travis-ci.org/lukassnoek/scanphyslog2bids.svg?branch=master)](https://travis-ci.org/lukassnoek/scanphyslog2bids)
 
-Code to convert Philips physiology files ("SCANPHYSLOG") to the BIDS-format, including the estimation of volume triggers using the logged gradient, volume markers, or by interpolation. It writes out BIDSified physio-files (as `*.tsv.gz` and associated `*.json` files). From there on, you can use other software to, for example, estimate RETROICOR/HRV/RVT regressors for nuisance regression. I recommend using the [PhysIO toolbox](https://github.com/translationalneuromodeling/tapas/tree/master/PhysIO) for this (worked really well for me in the past), but FSL's [PNM](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/PNM) should also work.
+Code to convert Philips physiology files ("SCANPHYSLOG") to the BIDS-format, including the estimation of volume triggers using the logged gradient, volume markers, or by interpolation. It writes out BIDSified physio-files (as `*.tsv.gz` and associated `*.json` files). From there on, you can use other software to, for example, estimate RETROICOR/HRV/RVT regressors for nuisance regression. I recommend using the [PhysIO toolbox](https://github.com/translationalneuromodeling/tapas/tree/master/PhysIO) for this (worked really well for me in the past, see image below), but FSL's [PNM](https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/PNM) should also work.
+
+![physio_map](docs/PhysIO_fstat_map.png)
 
 ## Installation
 I recommend installing the package from the master branch using `pip`:
