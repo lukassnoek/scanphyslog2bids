@@ -104,3 +104,4 @@ venv.bak/
 .mypy_cache/
 
 !scanphyslog2bids/data/*.log
+.vscode

@@ -13,7 +13,7 @@ def test_python_interface():
     logs = [
         (op.join(data_dir, 'example_for_gradient_log.log'), 'gradient_log', 496),
         (op.join(data_dir, 'example_for_interpolation.log'), 'interpolate', 496),
-        (op.join(data_dir, 'example_for_vol_triggers.log'), 'vol_markers', 500)
+        (op.join(data_dir, 'example_for_vol_markers.log'), 'vol_markers', 500)
     ]
 
     output_dir = op.join(data_dir, 'derivatives', 'physiology')

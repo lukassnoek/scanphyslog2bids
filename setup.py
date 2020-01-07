@@ -35,6 +35,7 @@ opts = dict(name=NAME,
             entry_points={
                 'console_scripts': [
                     'scanphyslog2bids = scanphyslog2bids.core:cmd_interface',
+                    'add_header_to_physio_tsv = scanphyslog2bids.utils:add_header_to_physio_tsv'
                     ]
                 }
             )
