@@ -13,7 +13,7 @@ def test_python_interface():
     logs = [
         (op.join(data_dir, 'example_for_gradient_log.log'), 'gradient_log', 496),
         (op.join(data_dir, 'example_for_interpolation.log'), 'interpolate', 496),
-        (op.join(data_dir, 'example_for_vol_triggers.log'), 'vol_triggers', 500)
+        (op.join(data_dir, 'example_for_vol_triggers.log'), 'vol_markers', 500)
     ]
 
     output_dir = op.join(data_dir, 'derivatives', 'physiology')
@@ -34,7 +34,6 @@ def test_python_interface():
         phlog.to_bids()  # writes out .tsv.gz and .json files
         phlog.plot_alignment(out_dir=output_dir)  # plots alignment with gradient
         phlog.plot_traces(out_dir=output_dir)
-
 
     # Teardown test
     if op.isdir(op.dirname(output_dir)):

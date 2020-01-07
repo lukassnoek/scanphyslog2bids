@@ -125,7 +125,7 @@ class PhilipsPhysioLog:
         trigger_method : str
             Method to find triggers. Either 'gradient_log' (using the
             logged gradients), 'interpolate' (interpolate triggers from start to end),
-            or 'vol_triggers' (using volume markers)
+            or 'vol_markers' (using volume markers)
         which_grad : str
             Which gradient to use for finding triggers (only relevant for gradient_log).
             Either 'x', 'y', or 'z'. The default ('y') is highly recommended
@@ -170,10 +170,10 @@ class PhilipsPhysioLog:
             self._determine_triggers_by_gradient(which_grad)
         elif trigger_method == 'interpolate':
             self._determine_triggers_by_interpolation(offset_end_scan)
-        elif trigger_method == 'vol_triggers':
+        elif trigger_method == 'vol_markers':
             self._determine_triggers_by_volume_markers()
         else:
-            raise ValueError("Please choose trigger_method from 'interpolate', 'vol_triggers', or 'gradient_log'")
+            raise ValueError("Please choose trigger_method from 'interpolate', 'vol_markers', or 'gradient_log'")
         
         self.real_triggers = self.real_triggers.astype(int)
 
