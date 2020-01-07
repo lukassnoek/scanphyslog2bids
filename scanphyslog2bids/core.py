@@ -135,7 +135,7 @@ class PhilipsPhysioLog:
         return self  # for chaining
 
     def align(self, trigger_method='gradient_log', which_grad='y', trigger_diff_cutoff=5,
-              offset_end_scan=0):
+              offset_end_scan=20):
         """ Tries to find the onset of the volumes ('triggers') as to align
         the physio data with the fMRI volumes.
 
@@ -152,8 +152,8 @@ class PhilipsPhysioLog:
             Cutoff for detecting erroneous trigger diffs (time between triggers)
         offset_end_scan : int
             Assumed offset of the end of your scan and the actual end of your last volume.
-            Unfortunately, this is not the same (thanks, Philips). The default, 166 samples,
-            has been empirically estimated using known scan offsets.
+            Unfortunately, this is not the same (thanks, Philips). The default, 20 samples,
+            is a reasonable default as empirically estimated using known scan offsets.
         """
 
         found_start_of_grad = False
