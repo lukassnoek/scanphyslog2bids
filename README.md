@@ -6,7 +6,13 @@ Code to convert Philips physiology files ("SCANPHYSLOG") to the BIDS-format, inc
 ![physio_map](docs/image.png)
 
 ## Installation
-I recommend installing the package from the master branch using `pip`:
+I recommend installing the package from PyPI using `pip`:
+
+```
+pip install -U scanphyslog2bids
+```
+
+If you want the latest (development) version, you can install it from Github:
 
 ```
 pip install https://github.com/lukassnoek/scanphyslog2bids/archive/master.zip
