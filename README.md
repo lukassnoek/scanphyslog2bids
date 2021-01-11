@@ -21,7 +21,7 @@ pip install https://github.com/lukassnoek/scanphyslog2bids/archive/master.zip
 Or clone this repository locally and install as follows:
 
 ```
-python setup.py install
+pip install .
 ```
 
 This package uses Python 3.6 or higher and depends on the following Python packages:
