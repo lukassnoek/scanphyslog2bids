@@ -12,8 +12,6 @@ with open(ver_file) as f:
 with open('README.md') as f:
     LONG_DESCRIPTION = f.read()
 
-with open('requirements.txt') as f:
-    REQUIRES = f.readlines()
 
 opts = dict(name=NAME,
             maintainer=MAINTAINER,
@@ -31,8 +29,13 @@ opts = dict(name=NAME,
             version=VERSION,
             packages=PACKAGES,
             package_data=PACKAGE_DATA,
-            install_requires=REQUIRES,
-            requires=REQUIRES,
+            install_requires=[
+	        'numpy>=1.16.5',
+                'pandas',
+                'matplotlib',
+                'nibabel',
+                'click'
+	    ],
             entry_points={
                 'console_scripts': [
                     'scanphyslog2bids = scanphyslog2bids.core:cmd_interface',
