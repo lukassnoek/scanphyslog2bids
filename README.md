@@ -106,5 +106,8 @@ If the gradients were not logged (this seems to happen at some scanners), you ca
 
 Also, make sure you use the right sampling frequency (the `sf` parameter). The default is set to 496, which is the sampling frequency for *wireless* physio recorders. If you use a wired physio recorder, the sampling frequency is 500 Hz (see [here](https://slideplayer.com/slide/10780586/)).
 
+## Using PhysIO
+To estimate RETROICOR (and HRV/RVT) regressors from the physiology data, I normally use the [PhysIO toolbox](https://github.com/translationalneuromodeling/tapas/tree/master/PhysIO). This toolbox should work with the BIDSified output from the `scanphyslog2bids` package. In the `scripts/run_physIO.m` file, I have included an example script which runs the PhysIO toolbox on an example output file from `scanphyslog2bids`. The settings there have worked for me in the past to succesfully create RETROICOR/HRV/RVT regressors for both 3T data (for 2D EPI scans) and 7T data (for 3D EPI scans).
+
 ## Issues
 Feel free to submit an issue when encountering issues (of better yet: send a PR if you fixed the bug yourself).
